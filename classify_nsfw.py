@@ -14,6 +14,7 @@ import time
 from PIL import Image
 from StringIO import StringIO
 import caffe
+import pymongo
 
 
 def resize_image(data, sz=(256, 256)):
@@ -85,10 +86,10 @@ def main(argv):
 
     parser = argparse.ArgumentParser()
     # Required arguments: input file.
-    parser.add_argument(
-        "input_file",
-        help="Path to the input image file"
-    )
+    #parser.add_argument(
+    #    "input_file",
+    #    help="Path to the input image file"
+    #)
 
     # Optional arguments.
     parser.add_argument(
@@ -101,7 +102,7 @@ def main(argv):
     )
 
     args = parser.parse_args()
-    image_data = open(args.input_file).read()
+    #image_data = open(args.input_file).read()
 
     # Pre-load caffe model.
     nsfw_net = caffe.Net(args.model_def,  # pylint: disable=invalid-name
@@ -116,12 +117,22 @@ def main(argv):
     caffe_transformer.set_channel_swap('data', (2, 1, 0))  # swap channels from RGB to BGR
 
     # Classify.
-    scores = caffe_preprocess_and_compute(image_data, caffe_transformer=caffe_transformer, caffe_net=nsfw_net, output_layers=['prob'])
+    #scores = caffe_preprocess_and_compute(image_data, caffe_transformer=caffe_transformer, caffe_net=nsfw_net, output_layers=['prob'])
 
     # Scores is the array containing SFW / NSFW image probabilities
     # scores[1] indicates the NSFW probability
-    print "NSFW score:  " , scores[1]
+    #print "NSFW score:  " , scores[1]
 
+    conn = pymongo.MongoClient("mongo", 27017)
+    db = conn.vk_walls
+    coll = db.vk_wall_photos
+
+    for men in coll.find({'face': {'$exists': True}, 'nsfw': {'$exists': False}}):
+        print men['_id']
+        image_data = open("/mnt/data/"+men['_id'][0:2]+"/"+men['_id']+".jpg").read()
+        scores = caffe_preprocess_and_compute(image_data, caffe_transformer=caffe_transformer, caffe_net=nsfw_net, output_layers=['prob'])
+        print coll.update({'_id': men['_id']}, {'$set': {'nsfw': scores[1] }})
+        #break
 
 
 if __name__ == '__main__':
